@@ -1,5 +1,5 @@
 {
-  "name": "Sorteador ",
-  "description": "Um aplicativo simples e elegante para sortear números de 1 a 60, ideal para jogos e loterias.",
+  "name": "Sorteador",
+  "description": "Um aplicativo elegante para sortear números e obter palpites inteligentes gerados por IA para seus jogos.",
   "requestFramePermissions": []
 }
