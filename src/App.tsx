@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { RefreshCw, History, Trash2, Settings2, CheckCircle2, Sparkles, BrainCircuit, AlertCircle } from 'lucide-react';
+import { RefreshCw, History, Trash2, Settings2, CheckCircle2, Sparkles, BrainCircuit, AlertCircle, Wand2 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface DrawResult {
@@ -36,6 +41,7 @@ export default function App() {
   const drawNumbers = useCallback(() => {
     setIsDrawing(true);
     setAiPrediction(null);
+    setAiError(null);
     
     // Simulate a drawing animation delay
     setTimeout(() => {
@@ -62,17 +68,27 @@ export default function App() {
   }, [count]);
 
   const generateAIPrediction = async () => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+      setAiError("A chave da API Gemini não foi configurada. Por favor, verifique as configurações do ambiente.");
+      return;
+    }
+
     setIsGeneratingAI(true);
     setAiError(null);
     setNumbers([]);
+    setAiPrediction(null);
     
     try {
-      const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const genAI = new GoogleGenAI({ apiKey });
       const response = await genAI.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Gere um palpite de ${count} números da sorte para a Mega-Sena (entre 1 e 60). 
-        Forneça também uma breve justificativa mística ou baseada em "intuição de dados" para esses números.
-        Os números devem ser únicos.`,
+        contents: `Gere um palpite de exatamente ${count} números da sorte para a Mega-Sena. 
+        Os números devem estar entre 1 e 60 e não podem se repetir.
+        Forneça também uma breve justificativa criativa (máximo 150 caracteres) para esses números, 
+        pode ser algo místico, estatístico ou puramente intuitivo.
+        Responda estritamente em JSON.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -93,9 +109,12 @@ export default function App() {
         }
       });
 
-      const result = JSON.parse(response.text || '{}') as AIPrediction;
+      const text = response.text;
+      if (!text) throw new Error("A IA retornou uma resposta vazia.");
       
-      if (result.numbers && Array.isArray(result.numbers)) {
+      const result = JSON.parse(text) as AIPrediction;
+      
+      if (result.numbers && Array.isArray(result.numbers) && result.numbers.length === count) {
         const sorted = result.numbers.sort((a, b) => a - b);
         setAiPrediction({ ...result, numbers: sorted });
         setNumbers(sorted);
@@ -108,11 +127,11 @@ export default function App() {
         };
         setHistory(prev => [newResult, ...prev].slice(0, 10));
       } else {
-        throw new Error("Resposta da IA inválida");
+        throw new Error("A IA gerou uma quantidade incorreta de números.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro na IA:", error);
-      setAiError("Não foi possível conectar com a inteligência mística. Tente novamente.");
+      setAiError(error.message || "Ocorreu um erro ao consultar a inteligência mística. Tente novamente.");
     } finally {
       setIsGeneratingAI(false);
     }
@@ -148,7 +167,7 @@ export default function App() {
         {/* Tabs */}
         <div className="flex gap-1 bg-black/5 p-1 rounded-xl w-fit">
           <button
-            onClick={() => { setActiveTab('draw'); setNumbers([]); setAiPrediction(null); }}
+            onClick={() => { setActiveTab('draw'); setNumbers([]); setAiPrediction(null); setAiError(null); }}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
               activeTab === 'draw' ? 'bg-white shadow-sm text-black' : 'text-black/40 hover:text-black/60'
             }`}
@@ -157,7 +176,7 @@ export default function App() {
             Sorteio Aleatório
           </button>
           <button
-            onClick={() => { setActiveTab('ai'); setNumbers([]); setAiPrediction(null); }}
+            onClick={() => { setActiveTab('ai'); setNumbers([]); setAiPrediction(null); setAiError(null); }}
             className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
               activeTab === 'ai' ? 'bg-white shadow-sm text-black' : 'text-black/40 hover:text-black/60'
             }`}
@@ -237,7 +256,16 @@ export default function App() {
                 className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-700 text-sm"
               >
                 <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                <span>{aiError}</span>
+                <div className="space-y-2">
+                  <p className="font-medium">Erro na Conexão</p>
+                  <p className="opacity-80 leading-relaxed">{aiError}</p>
+                  <button 
+                    onClick={generateAIPrediction}
+                    className="text-xs font-bold uppercase tracking-widest underline hover:opacity-70"
+                  >
+                    Tentar Novamente
+                  </button>
+                </div>
               </motion.div>
             )}
           </section>
@@ -251,24 +279,37 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="flex flex-wrap justify-center gap-4"
+                  className="flex flex-col items-center gap-8"
                 >
-                  {Array.from({ length: count }).map((_, i) => (
-                    <motion.div
-                      key={i}
-                      animate={{ 
-                        scale: [1, 1.1, 1],
-                        opacity: [0.3, 1, 0.3],
-                        backgroundColor: activeTab === 'ai' ? ['#e0e7ff', '#818cf8', '#e0e7ff'] : ['#f3f4f6', '#d1d5db', '#f3f4f6']
-                      }}
-                      transition={{ 
-                        repeat: Infinity, 
-                        duration: 0.8, 
-                        delay: i * 0.1 
-                      }}
-                      className="w-16 h-16 rounded-full border border-dashed border-black/10 flex items-center justify-center"
-                    />
-                  ))}
+                  <div className="flex flex-wrap justify-center gap-4">
+                    {Array.from({ length: count }).map((_, i) => (
+                      <motion.div
+                        key={i}
+                        animate={{ 
+                          scale: [1, 1.1, 1],
+                          opacity: [0.3, 1, 0.3],
+                          backgroundColor: activeTab === 'ai' ? ['#e0e7ff', '#818cf8', '#e0e7ff'] : ['#f3f4f6', '#d1d5db', '#f3f4f6']
+                        }}
+                        transition={{ 
+                          repeat: Infinity, 
+                          duration: 0.8, 
+                          delay: i * 0.1 
+                        }}
+                        className="w-16 h-16 rounded-full border border-dashed border-black/10 flex items-center justify-center"
+                      />
+                    ))}
+                  </div>
+                  <motion.div
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-black/30"
+                  >
+                    {activeTab === 'ai' ? (
+                      <><Wand2 size={12} /> Alinhando Astros Digitais...</>
+                    ) : (
+                      <><RefreshCw size={12} className="animate-spin" /> Sorteando...</>
+                    )}
+                  </motion.div>
                 </motion.div>
               ) : numbers.length > 0 ? (
                 <motion.div
