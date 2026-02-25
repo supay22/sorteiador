@@ -1,0 +1,5 @@
+{
+  "name": "Sorteador ",
+  "description": "Um aplicativo simples e elegante para sortear números de 1 a 60, ideal para jogos e loterias.",
+  "requestFramePermissions": []
+}
