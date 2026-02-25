@@ -70,9 +70,13 @@ export default function App() {
   const generateAIPrediction = async () => {
     const apiKey = process.env.GEMINI_API_KEY;
     
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      setAiError("A chave da API Gemini não foi configurada. Por favor, verifique as configurações do ambiente.");
-      return;
+    if (!apiKey || apiKey === "" || apiKey.includes("MY_GEMINI_API_KEY")) {
+      // No AI Studio, a chave é injetada automaticamente. 
+      // Se cair aqui, tentaremos usar a chave mesmo assim ou daremos um erro mais específico.
+      if (!apiKey) {
+        setAiError("A chave da API Gemini não foi detectada. Aguarde um momento e tente novamente.");
+        return;
+      }
     }
 
     setIsGeneratingAI(true);
